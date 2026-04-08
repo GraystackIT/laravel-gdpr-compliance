@@ -1,10 +1,34 @@
 <?php
 
-namespace Tests;
+declare(strict_types=1);
 
-use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+namespace GraystackIt\Gdpr\Tests;
 
-abstract class TestCase extends BaseTestCase
+use GraystackIt\Gdpr\GdprServiceProvider;
+use Orchestra\Testbench\TestCase as Orchestra;
+
+abstract class TestCase extends Orchestra
 {
-    //
+    protected function getPackageProviders($app): array
+    {
+        return [
+            GdprServiceProvider::class,
+        ];
+    }
+
+    protected function defineEnvironment($app): void
+    {
+        $app['config']->set('database.default', 'testing');
+        $app['config']->set('database.connections.testing', [
+            'driver' => 'sqlite',
+            'database' => ':memory:',
+            'prefix' => '',
+            'foreign_key_constraints' => true,
+        ]);
+    }
+
+    protected function defineDatabaseMigrations(): void
+    {
+        $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+    }
 }
