@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "laravel-boost": {
+      "command": "/Users/bharb/Library/Application Support/Herd/bin/php",
+      "args": [
+        "/Users/bharb/Development/Packages/laravel-gdpr-compliance/artisan",
+        "boost:mcp"
+      ]
+    }
+  }
+}
