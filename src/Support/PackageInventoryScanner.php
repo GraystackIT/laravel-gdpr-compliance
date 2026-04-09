@@ -39,7 +39,7 @@ class PackageInventoryScanner
 
         Storage::disk($this->outputDisk)->put(
             $this->outputPath,
-            (string) json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
         );
 
         return $payload;

@@ -70,7 +70,7 @@ class PersonalDataExporter
             (string) Str::ulid(),
         );
 
-        Storage::disk($disk)->put($filename, (string) json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        Storage::disk($disk)->put($filename, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
 
         return ['path' => $filename, 'manifest' => $payload['manifest']];
     }
