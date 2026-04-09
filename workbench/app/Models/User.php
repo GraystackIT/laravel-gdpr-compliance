@@ -10,11 +10,14 @@ use GraystackIt\Gdpr\Support\PersonalDataBlueprint;
 use GraystackIt\Gdpr\Traits\HasConsentRecords;
 use GraystackIt\Gdpr\Traits\HasPersonalData;
 use GraystackIt\Gdpr\Traits\IsPersonalDataSubject;
+use Illuminate\Auth\Authenticatable;
+use Illuminate\Contracts\Auth\Authenticatable as AuthenticatableContract;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Notifiable;
 
-class User extends Model implements PersonalData
+class User extends Model implements AuthenticatableContract, PersonalData
 {
+    use Authenticatable;
     use HasConsentRecords;
     use HasPersonalData;
     use IsPersonalDataSubject;
