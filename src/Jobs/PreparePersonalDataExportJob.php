@@ -49,7 +49,15 @@ class PreparePersonalDataExportJob implements ShouldQueue
             return;
         }
 
-        $result = $exporter->export($subject, $request);
+        try {
+            $result = $exporter->export($subject, $request);
+        } catch (\Throwable $e) {
+            $request->status = RequestStatus::Failed;
+            $request->completed_at = now();
+            $request->save();
+
+            throw $e;
+        }
 
         $request->status = RequestStatus::Completed;
         $request->export_file_path = $result['path'];
