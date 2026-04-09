@@ -14,11 +14,25 @@ class AddressAnonymizer implements Anonymizer
             return null;
         }
 
-        // For JSON/array addresses, wipe component fields but keep structure.
+        // For JSON/array addresses, recursively wipe all scalar leaves but keep structure.
         if (is_array($value)) {
-            return array_map(fn () => '[REDACTED]', $value);
+            return $this->redactArray($value);
         }
 
         return $config['placeholder'] ?? '[REDACTED ADDRESS]';
+    }
+
+    /**
+     * @param  array<mixed>  $data
+     * @return array<mixed>
+     */
+    protected function redactArray(array $data): array
+    {
+        $result = [];
+        foreach ($data as $key => $item) {
+            $result[$key] = is_array($item) ? $this->redactArray($item) : '[REDACTED]';
+        }
+
+        return $result;
     }
 }

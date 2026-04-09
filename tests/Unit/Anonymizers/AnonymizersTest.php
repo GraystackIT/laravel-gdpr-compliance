@@ -62,12 +62,28 @@ it('IpAddressAnonymizer returns null for invalid input', function () {
         ->and($a->anonymize(null))->toBeNull();
 });
 
-it('AddressAnonymizer redacts strings and arrays', function () {
+it('AddressAnonymizer redacts strings and flat arrays', function () {
     $a = new AddressAnonymizer;
 
     expect($a->anonymize('Main St 1, 1010 Vienna'))->toBe('[REDACTED ADDRESS]')
         ->and($a->anonymize(['street' => 'Main St 1', 'city' => 'Vienna']))
         ->toBe(['street' => '[REDACTED]', 'city' => '[REDACTED]']);
+});
+
+it('AddressAnonymizer redacts nested arrays recursively', function () {
+    $a = new AddressAnonymizer;
+
+    $nested = [
+        'billing' => ['street' => 'Main St 1', 'city' => 'Vienna'],
+        'shipping' => ['street' => 'Side St 2', 'zip' => '1010'],
+    ];
+
+    $result = $a->anonymize($nested);
+
+    expect($result)->toBe([
+        'billing' => ['street' => '[REDACTED]', 'city' => '[REDACTED]'],
+        'shipping' => ['street' => '[REDACTED]', 'zip' => '[REDACTED]'],
+    ]);
 });
 
 it('FreeTextAnonymizer replaces whole text by default', function () {
