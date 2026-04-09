@@ -46,6 +46,24 @@ class PackageInventoryScanner
     }
 
     /**
+     * Read the last generated inventory JSON file (without re-scanning).
+     * Returns null if the file does not exist.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function read(): ?array
+    {
+        if (! Storage::disk($this->outputDisk)->exists($this->outputPath)) {
+            return null;
+        }
+
+        $raw = Storage::disk($this->outputDisk)->get($this->outputPath);
+        $data = json_decode((string) $raw, true);
+
+        return is_array($data) ? $data : null;
+    }
+
+    /**
      * @return array<int, array{name: string, version: string, description: ?string, homepage: ?string}>
      */
     protected function readComposer(): array

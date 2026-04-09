@@ -14,8 +14,11 @@ use GraystackIt\Gdpr\Anonymizers\StaticTextAnonymizer;
 use GraystackIt\Gdpr\GdprServiceProvider;
 use GraystackIt\Gdpr\Support\AnonymizerManager;
 use GraystackIt\Gdpr\Support\AuditLogger;
+use GraystackIt\Gdpr\Support\ConsentManager;
 use GraystackIt\Gdpr\Support\DeletionScheduler;
+use GraystackIt\Gdpr\Support\GdprManager;
 use GraystackIt\Gdpr\Support\ModelRegistry;
+use GraystackIt\Gdpr\Support\PackageInventoryScanner;
 use GraystackIt\Gdpr\Support\PersonalDataEraser;
 use GraystackIt\Gdpr\Support\PersonalDataExporter;
 use GraystackIt\Gdpr\Support\SubjectRecordResolver;
@@ -103,6 +106,22 @@ abstract class TestCase extends Orchestra
                 $app->make(SubjectRecordResolver::class),
                 $app->make(PersonalDataEraser::class),
                 $app->make(AuditLogger::class),
+            )
+        );
+
+        $this->app->singleton(ConsentManager::class, fn () => new ConsentManager);
+
+        $this->app->singleton(
+            PackageInventoryScanner::class,
+            fn () => new PackageInventoryScanner(base_path())
+        );
+
+        $this->app->singleton(
+            GdprManager::class,
+            fn ($app) => new GdprManager(
+                $app->make(DeletionScheduler::class),
+                $app->make(PersonalDataExporter::class),
+                $app->make(PackageInventoryScanner::class),
             )
         );
     }

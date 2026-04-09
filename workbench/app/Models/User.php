@@ -7,12 +7,16 @@ namespace Workbench\App\Models;
 use GraystackIt\Gdpr\Contracts\PersonalData;
 use GraystackIt\Gdpr\Enums\RetentionMode;
 use GraystackIt\Gdpr\Support\PersonalDataBlueprint;
+use GraystackIt\Gdpr\Traits\HasConsentRecords;
+use GraystackIt\Gdpr\Traits\HasPersonalData;
 use GraystackIt\Gdpr\Traits\IsPersonalDataSubject;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Notifiable;
 
 class User extends Model implements PersonalData
 {
+    use HasConsentRecords;
+    use HasPersonalData;
     use IsPersonalDataSubject;
     use Notifiable;
 
