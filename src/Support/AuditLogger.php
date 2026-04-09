@@ -49,7 +49,13 @@ class AuditLogger
             return [$subject::class, (int) $subject->getKey()];
         }
 
-        return [(string) $subjectType, (int) $subjectId];
+        if ($subjectType === null || $subjectType === '' || $subjectId === null) {
+            throw new \InvalidArgumentException(
+                'AuditLogger::log() requires either a $subject model or both $subjectType and $subjectId.',
+            );
+        }
+
+        return [$subjectType, $subjectId];
     }
 
     /**
