@@ -20,7 +20,7 @@ class GdprEraseCommand extends Command
     public function handle(GdprManager $manager): int
     {
         $class = (string) $this->argument('subject');
-        $id = (int) $this->argument('id');
+        $id = (string) $this->argument('id');
 
         if (! class_exists($class)) {
             $this->error("Class {$class} does not exist.");
