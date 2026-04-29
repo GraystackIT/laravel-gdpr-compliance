@@ -37,11 +37,10 @@ php artisan vendor:publish --tag=gdpr-migrations
 php artisan migrate
 ```
 
-Optionally publish translations and notification views for customization:
+Optionally publish translations for customization:
 
 ```bash
 php artisan vendor:publish --tag=gdpr-lang
-php artisan vendor:publish --tag=gdpr-views
 ```
 
 ## Quick Start
@@ -522,7 +521,6 @@ When processing Subject A, the package never modifies Subject B — even if B ha
 | `gdpr-config` | `config/gdpr.php` | Yes |
 | `gdpr-migrations` | `database/migrations/*.php` | Yes |
 | `gdpr-lang` | `lang/vendor/gdpr/en/gdpr.php` | No — for text customization |
-| `gdpr-views` | `resources/views/vendor/gdpr/notifications/*.blade.php` | No — for mail branding |
 | `gdpr-notifications` | `app/Notifications/*.php` | No — for deep notification customization |
 | `gdpr` | All of the above | Convenience |
 
