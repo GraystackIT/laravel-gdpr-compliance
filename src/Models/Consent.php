@@ -11,7 +11,7 @@ class Consent extends Model
 {
     public const UPDATED_AT = null;
 
-    protected $table = 'consents';
+    protected $table = 'gdpr_consents';
 
     protected $guarded = [];
 

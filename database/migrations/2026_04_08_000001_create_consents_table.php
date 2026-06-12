@@ -10,7 +10,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('consents', function (Blueprint $table) {
+        Schema::create('gdpr_consents', function (Blueprint $table) {
             $table->id();
 
             $table->string('subject_type');
@@ -37,6 +37,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('consents');
+        Schema::dropIfExists('gdpr_consents');
     }
 };
