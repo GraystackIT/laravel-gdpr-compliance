@@ -50,7 +50,12 @@ class PreparePersonalDataExportJob implements ShouldQueue
         }
 
         try {
-            $result = $exporter->export($subject, $request);
+            $result = $exporter->export(
+                $subject,
+                $request,
+                config('gdpr.exports.disk', 'local'),
+                config('gdpr.exports.path_prefix', 'gdpr/exports'),
+            );
         } catch (\Throwable $e) {
             $request->status = RequestStatus::Failed;
             $request->completed_at = now();
@@ -61,7 +66,7 @@ class PreparePersonalDataExportJob implements ShouldQueue
 
         $request->status = RequestStatus::Completed;
         $request->export_file_path = $result['path'];
-        $request->export_expires_at = now()->addDays(7);
+        $request->export_expires_at = now()->addDays((int) config('gdpr.exports.expires_days', 7));
         $request->completed_at = now();
         $request->save();
 

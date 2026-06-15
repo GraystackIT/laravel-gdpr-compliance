@@ -42,6 +42,40 @@ it('PreparePersonalDataExportJob writes file and marks request completed', funct
     Event::assertDispatched(PersonalDataExported::class);
 });
 
+it('PreparePersonalDataExportJob writes to the configured disk, prefix and expiry', function () {
+    config([
+        'gdpr.exports.disk' => 's3',
+        'gdpr.exports.path_prefix' => 'custom/exports',
+        'gdpr.exports.expires_days' => 14,
+    ]);
+    Storage::fake('s3');
+    Storage::fake('local');
+    Event::fake([PersonalDataExported::class]);
+
+    $user = User::create(['name' => 'Ada', 'email' => 'ada@example.com']);
+
+    $request = GdprRequest::create([
+        'subject_type' => User::class,
+        'subject_id' => $user->id,
+        'type' => RequestType::Export,
+        'status' => RequestStatus::Pending,
+        'requested_at' => now(),
+    ]);
+
+    (new PreparePersonalDataExportJob($request->id))->handle(
+        app(PersonalDataExporter::class)
+    );
+
+    $path = $request->fresh()->export_file_path;
+
+    expect($path)->toStartWith('custom/exports/')
+        ->and($request->fresh()->export_expires_at->toDateString())
+        ->toBe(now()->addDays(14)->toDateString());
+
+    Storage::disk('s3')->assertExists($path);
+    Storage::disk('local')->assertMissing($path);
+});
+
 it('PreparePersonalDataExportJob is idempotent on terminal requests', function () {
     Storage::fake('local');
 
