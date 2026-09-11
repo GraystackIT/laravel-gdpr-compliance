@@ -37,6 +37,29 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Subject key type
+    |--------------------------------------------------------------------------
+    |
+    | Column type of subject_id in the gdpr_* tables. Subjects are stored as a
+    | morph tuple, not a foreign key, so the type cannot be inferred.
+    |
+    |   'bigint' — default auto-incrementing Laravel keys
+    |   'uuid'   — every subject model uses UUID keys
+    |   'ulid'   — every subject model uses ULID keys
+    |   'string' — mixed key types (varchar(64); the only value that holds
+    |              numeric and non-numeric subject keys side by side)
+    |
+    | Changing this on an existing installation is a schema change. Publish and
+    | run the upgrade migration:
+    |
+    |   php artisan vendor:publish --tag=gdpr-upgrade-migrations
+    |
+    */
+
+    'subject_key_type' => env('GDPR_SUBJECT_KEY_TYPE', 'bigint'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Anonymizer aliases
     |--------------------------------------------------------------------------
     |

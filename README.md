@@ -306,9 +306,20 @@ $user->withdrawConsent(ConsentPurpose::Analytics, 'profile_settings');
 $user->hasConsent(ConsentPurpose::Analytics); // latest action wins
 ```
 
-The `consents` table is **append-only**. Each grant and withdraw is a new row. The current state is the latest row per `(subject, purpose)`.
+The `gdpr_consents` table is **append-only**. Each grant and withdraw is a new row. The current state is the latest row per `(subject, purpose)`.
 
-`ConsentPurpose::Necessary` always returns `true` without any database check.
+`ConsentPurpose::Necessary` always returns `true` without any database check. Every other case requires an explicit grant:
+
+| Case | Value |
+|---|---|
+| `Necessary` | `necessary` |
+| `Analytics` | `analytics` |
+| `Marketing` | `marketing` |
+| `EmbeddedContent` | `embedded_content` |
+| `Personalization` | `personalization` |
+| `TalentPool` | `talent_pool` |
+
+`TalentPool` covers keeping an applicant's data on file after the vacancy they applied for is closed. Processing the application itself runs on a legitimate interest with its own deletion deadline; keeping it for the *next* vacancy is a separate purpose the person has to agree to — and withdrawing that consent brings the deletion deadline back.
 
 ### Cookie consent (anonymous visitors)
 
@@ -473,7 +484,7 @@ Configure in `config/gdpr.php`:
 
 | Table | Purpose |
 |---|---|
-| `consents` | Append-only consent records (grant/withdraw) per subject and purpose |
+| `gdpr_consents` | Append-only consent records (grant/withdraw) per subject and purpose |
 | `gdpr_requests` | Top-level request lifecycle (export/delete), email snapshot |
 | `gdpr_deletions` | One row per (request x affected model), retention snapshot, state machine, process_order |
 | `gdpr_audits` | Event-driven audit log for the deletion/export pipeline |
@@ -510,6 +521,26 @@ The package gives you the tooling. Field selection is your responsibility.
 
 The package cannot reach into backup files. If you restore from a backup, pending deletion requests should be re-applied. Document your backup retention in your privacy policy and ensure backups rotate within a documented window.
 
+### Subject key types
+
+Subjects are stored as a morph tuple (`subject_type` + `subject_id`), not a foreign key, so the package cannot infer the key type of your subject models — `config('gdpr.subject_key_type')` declares it:
+
+| Value | `subject_id` column | Use when |
+|---|---|---|
+| `bigint` (default) | `unsignedBigInteger` | All subjects use auto-incrementing keys |
+| `uuid` | `uuid` | All subjects use UUID keys |
+| `ulid` | `ulid` | All subjects use ULID keys |
+| `string` | `varchar(64)` | Subjects have **mixed** key types (e.g. a `User` with a bigint key and an `Applicant` with a UUID) |
+
+`string` is the only value that holds numeric and non-numeric subject keys side by side, so it is the one to pick as soon as a second subject model with a different key type is registered.
+
+Changing this on an existing installation is a schema change. Publish and run the upgrade migration, which rewrites `subject_id` in all five tables to the configured type:
+
+```bash
+php artisan vendor:publish --tag=gdpr-upgrade-migrations
+php artisan migrate
+```
+
 ### Subject-to-subject references
 
 When processing Subject A, the package never modifies Subject B — even if B has a foreign key to A. Use `onDelete('set null')` on FK migrations or listen to the `PersonalDataErased` event to handle cross-subject cleanup in your app code.
@@ -520,9 +551,10 @@ When processing Subject A, the package never modifies Subject B — even if B ha
 |---|---|---|
 | `gdpr-config` | `config/gdpr.php` | Yes |
 | `gdpr-migrations` | `database/migrations/*.php` | Yes |
+| `gdpr-upgrade-migrations` | `database/migrations/*_change_gdpr_subject_id_type.php` | No — only when changing `subject_key_type` |
 | `gdpr-lang` | `lang/vendor/gdpr/en/gdpr.php` | No — for text customization |
 | `gdpr-notifications` | `app/Notifications/*.php` | No — for deep notification customization |
-| `gdpr` | All of the above | Convenience |
+| `gdpr` | Config, migrations, lang and notifications | Convenience |
 
 ## Testing
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GraystackIt\Gdpr\Support;
 
 use GraystackIt\Gdpr\Enums\ConsentPurpose;
+use GraystackIt\Gdpr\Enums\SubjectKeyType;
 use GraystackIt\Gdpr\Models\Consent;
 use Illuminate\Database\Eloquent\Model;
 
@@ -23,7 +24,7 @@ class ConsentManager
     {
         return Consent::create([
             'subject_type' => $subject::class,
-            'subject_id' => $subject->getKey(),
+            'subject_id' => SubjectKeyType::of($subject),
             'purpose' => $purpose->value,
             'action' => 'grant',
             'source' => $source,
@@ -38,7 +39,7 @@ class ConsentManager
     {
         return Consent::create([
             'subject_type' => $subject::class,
-            'subject_id' => $subject->getKey(),
+            'subject_id' => SubjectKeyType::of($subject),
             'purpose' => $purpose->value,
             'action' => 'withdraw',
             'source' => $source,
@@ -54,7 +55,7 @@ class ConsentManager
 
         $latest = Consent::query()
             ->where('subject_type', $subject::class)
-            ->where('subject_id', $subject->getKey())
+            ->where('subject_id', SubjectKeyType::of($subject))
             ->where('purpose', $purpose->value)
             ->latest('created_at')
             ->first();

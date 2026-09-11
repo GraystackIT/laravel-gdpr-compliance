@@ -12,6 +12,16 @@ enum ConsentPurpose: string
     case EmbeddedContent = 'embedded_content';
     case Personalization = 'personalization';
 
+    /**
+     * Keeping somebody's data on file after the purpose it was given for has ended.
+     *
+     * The case a recruiting talent pool needs: an application is processed on a legitimate
+     * interest and deleted when the vacancy is closed, and keeping it for the *next* vacancy is
+     * a different purpose the person has to agree to — which also means the consent is
+     * withdrawable and the deletion deadline comes back when it is.
+     */
+    case TalentPool = 'talent_pool';
+
     public function label(): string
     {
         return match ($this) {
@@ -20,6 +30,7 @@ enum ConsentPurpose: string
             self::Marketing => 'Marketing',
             self::EmbeddedContent => 'Embedded content',
             self::Personalization => 'Personalization',
+            self::TalentPool => 'Talent pool',
         };
     }
 

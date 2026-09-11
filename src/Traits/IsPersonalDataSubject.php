@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GraystackIt\Gdpr\Traits;
 
+use GraystackIt\Gdpr\Enums\SubjectKeyType;
 use GraystackIt\Gdpr\Models\GdprRequest;
 use GraystackIt\Gdpr\Support\GdprManager;
 use Illuminate\Database\Eloquent\Builder;
@@ -36,7 +37,7 @@ trait IsPersonalDataSubject
     {
         $pending = GdprRequest::query()
             ->where('subject_type', static::class)
-            ->where('subject_id', $this->getKey())
+            ->where('subject_id', SubjectKeyType::of($this))
             ->whereIn('status', ['pending', 'processing'])
             ->latest('requested_at')
             ->first();

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use GraystackIt\Gdpr\Enums\SubjectKeyType;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -15,7 +16,7 @@ return new class extends Migration
 
             // Subject FK (orphaned after hard delete is intentional)
             $table->string('subject_type');
-            $table->unsignedBigInteger('subject_id');
+            SubjectKeyType::configured()->column($table);
             $table->index(['subject_type', 'subject_id']);
 
             $table->string('event');

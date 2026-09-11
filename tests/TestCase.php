@@ -12,6 +12,8 @@ use Workbench\App\Models\User;
 
 abstract class TestCase extends Orchestra
 {
+    protected string $subjectKeyType = 'bigint';
+
     protected function getPackageProviders($app): array
     {
         return [
@@ -30,11 +32,20 @@ abstract class TestCase extends Orchestra
             'foreign_key_constraints' => true,
         ]);
 
-        $app['config']->set('gdpr.models', [
+        $app['config']->set('gdpr.subject_key_type', $this->subjectKeyType);
+        $app['config']->set('gdpr.models', $this->registeredModels());
+    }
+
+    /**
+     * @return list<class-string>
+     */
+    protected function registeredModels(): array
+    {
+        return [
             User::class,
             Order::class,
             Address::class,
-        ]);
+        ];
     }
 
     protected function defineDatabaseMigrations(): void

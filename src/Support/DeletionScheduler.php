@@ -8,6 +8,7 @@ use GraystackIt\Gdpr\Enums\DeletionState;
 use GraystackIt\Gdpr\Enums\RequestStatus;
 use GraystackIt\Gdpr\Enums\RequestType;
 use GraystackIt\Gdpr\Enums\RetentionMode;
+use GraystackIt\Gdpr\Enums\SubjectKeyType;
 use GraystackIt\Gdpr\Events\LegalHoldExpired;
 use GraystackIt\Gdpr\Events\LegalHoldStarted;
 use GraystackIt\Gdpr\Events\PersonalDataAnonymized;
@@ -68,7 +69,7 @@ class DeletionScheduler
 
             $request = GdprRequest::create([
                 'subject_type' => $subject::class,
-                'subject_id' => $subject->getKey(),
+                'subject_id' => SubjectKeyType::of($subject),
                 'type' => RequestType::Delete,
                 'status' => RequestStatus::Pending,
                 'notification_email' => $subject->getAttribute('email'),
@@ -103,7 +104,7 @@ class DeletionScheduler
                 GdprDeletion::create([
                     'gdpr_request_id' => $request->id,
                     'subject_type' => $subject::class,
-                    'subject_id' => $subject->getKey(),
+                    'subject_id' => SubjectKeyType::of($subject),
                     'target_model' => $modelClass,
                     'retention_snapshot' => $policy->toSnapshot(),
                     'state' => DeletionState::PendingGrace,
@@ -169,7 +170,7 @@ class DeletionScheduler
             $this->auditLogger->log(
                 event: 'deletion_cancelled',
                 subjectType: $request->subject_type,
-                subjectId: (int) $request->subject_id,
+                subjectId: $request->subject_id,
             );
 
             Event::dispatch(new PersonalDataDeletionCancelled($request));
@@ -298,13 +299,13 @@ class DeletionScheduler
         $this->auditLogger->log(
             event: 'legal_hold_expired',
             subjectType: $row->subject_type,
-            subjectId: (int) $row->subject_id,
+            subjectId: $row->subject_id,
             targetModel: $row->target_model,
         );
         $this->auditLogger->log(
             event: 'deletion_completed',
             subjectType: $row->subject_type,
-            subjectId: (int) $row->subject_id,
+            subjectId: $row->subject_id,
             targetModel: $row->target_model,
         );
 
@@ -326,7 +327,7 @@ class DeletionScheduler
         $this->auditLogger->log(
             event: 'deletion_completed',
             subjectType: $row->subject_type,
-            subjectId: (int) $row->subject_id,
+            subjectId: $row->subject_id,
             targetModel: $targetModel,
             affectedRows: $affected,
             context: ['mode' => 'delete'],
@@ -349,7 +350,7 @@ class DeletionScheduler
         $this->auditLogger->log(
             event: 'anonymization_completed',
             subjectType: $row->subject_type,
-            subjectId: (int) $row->subject_id,
+            subjectId: $row->subject_id,
             targetModel: $targetModel,
             affectedRows: $count,
             context: ['mode' => 'anonymize'],
@@ -373,7 +374,7 @@ class DeletionScheduler
         $this->auditLogger->log(
             event: 'anonymization_completed',
             subjectType: $row->subject_type,
-            subjectId: (int) $row->subject_id,
+            subjectId: $row->subject_id,
             targetModel: $targetModel,
             affectedRows: $count,
             context: ['mode' => 'legal_hold'],
@@ -381,7 +382,7 @@ class DeletionScheduler
         $this->auditLogger->log(
             event: 'legal_hold_started',
             subjectType: $row->subject_type,
-            subjectId: (int) $row->subject_id,
+            subjectId: $row->subject_id,
             targetModel: $targetModel,
             context: [
                 'hold_until' => $row->hold_until->toIso8601String(),

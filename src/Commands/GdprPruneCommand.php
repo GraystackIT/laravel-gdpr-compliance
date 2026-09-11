@@ -50,7 +50,7 @@ class GdprPruneCommand extends Command
 
         if ($only === null || $only === 'consents') {
             // Preserve latest row per (subject_type, subject_id, purpose).
-            $latestIds = DB::table('consents')
+            $latestIds = DB::table('gdpr_consents')
                 ->select(DB::raw('MAX(id) as id'))
                 ->groupBy('subject_type', 'subject_id', 'purpose')
                 ->pluck('id');

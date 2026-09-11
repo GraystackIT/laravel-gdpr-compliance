@@ -7,6 +7,7 @@ namespace GraystackIt\Gdpr\Support;
 use GraystackIt\Gdpr\Enums\DeletionState;
 use GraystackIt\Gdpr\Enums\RequestStatus;
 use GraystackIt\Gdpr\Enums\RequestType;
+use GraystackIt\Gdpr\Enums\SubjectKeyType;
 use GraystackIt\Gdpr\Models\GdprDeletion;
 use GraystackIt\Gdpr\Models\GdprRequest;
 use Illuminate\Database\Eloquent\Model;
@@ -60,7 +61,7 @@ class GdprManager
     {
         return GdprRequest::create([
             'subject_type' => $subject::class,
-            'subject_id' => $subject->getKey(),
+            'subject_id' => SubjectKeyType::of($subject),
             'type' => RequestType::Export,
             'status' => RequestStatus::Pending,
             'notification_email' => $subject->getAttribute('email'),
@@ -75,7 +76,7 @@ class GdprManager
     {
         return GdprDeletion::query()
             ->where('subject_type', $subject::class)
-            ->where('subject_id', $subject->getKey())
+            ->where('subject_id', SubjectKeyType::of($subject))
             ->whereIn('state', [
                 DeletionState::PendingGrace->value,
                 DeletionState::PendingLegalHold->value,

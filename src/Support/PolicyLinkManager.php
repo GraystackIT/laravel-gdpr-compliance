@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GraystackIt\Gdpr\Support;
 
+use GraystackIt\Gdpr\Enums\SubjectKeyType;
 use GraystackIt\Gdpr\Models\GdprPolicyAcceptance;
 use GraystackIt\Gdpr\Models\GdprPolicyVersion;
 use Illuminate\Database\Eloquent\Model;
@@ -62,7 +63,7 @@ class PolicyLinkManager
         return GdprPolicyAcceptance::create([
             'gdpr_policy_version_id' => $version->id,
             'subject_type' => $subject::class,
-            'subject_id' => $subject->getKey(),
+            'subject_id' => SubjectKeyType::of($subject),
             'context' => $context !== [] ? $context : null,
         ]);
     }
@@ -77,7 +78,7 @@ class PolicyLinkManager
                 }
             })
             ->where('subject_type', $subject::class)
-            ->where('subject_id', $subject->getKey());
+            ->where('subject_id', SubjectKeyType::of($subject));
 
         return $query->exists();
     }

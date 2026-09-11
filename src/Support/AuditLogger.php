@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GraystackIt\Gdpr\Support;
 
+use GraystackIt\Gdpr\Enums\SubjectKeyType;
 use GraystackIt\Gdpr\Models\GdprAudit;
 use Illuminate\Database\Eloquent\Model;
 
@@ -23,7 +24,7 @@ class AuditLogger
         string $event,
         ?Model $subject = null,
         ?string $subjectType = null,
-        ?int $subjectId = null,
+        int|string|null $subjectId = null,
         ?string $targetModel = null,
         ?int $affectedRows = null,
         array $context = [],
@@ -41,12 +42,12 @@ class AuditLogger
     }
 
     /**
-     * @return array{0: string, 1: int}
+     * @return array{0: string, 1: int|string}
      */
-    protected function resolveSubject(?Model $subject, ?string $subjectType, ?int $subjectId): array
+    protected function resolveSubject(?Model $subject, ?string $subjectType, int|string|null $subjectId): array
     {
         if ($subject !== null) {
-            return [$subject::class, (int) $subject->getKey()];
+            return [$subject::class, SubjectKeyType::of($subject)];
         }
 
         if ($subjectType === null || $subjectType === '' || $subjectId === null) {

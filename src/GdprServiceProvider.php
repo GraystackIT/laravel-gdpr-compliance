@@ -144,6 +144,10 @@ class GdprServiceProvider extends ServiceProvider
         ], ['gdpr-migrations', 'gdpr']);
 
         $this->publishes([
+            __DIR__.'/../database/upgrades' => database_path('migrations'),
+        ], ['gdpr-upgrade-migrations']);
+
+        $this->publishes([
             __DIR__.'/../lang' => $this->app->langPath('vendor/gdpr'),
         ], ['gdpr-lang', 'gdpr']);
 

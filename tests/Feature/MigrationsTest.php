@@ -16,7 +16,7 @@ use GraystackIt\Gdpr\Support\RetentionPolicy;
 use Illuminate\Support\Facades\Schema;
 
 it('creates all GDPR tables', function () {
-    expect(Schema::hasTable('consents'))->toBeTrue()
+    expect(Schema::hasTable('gdpr_consents'))->toBeTrue()
         ->and(Schema::hasTable('gdpr_requests'))->toBeTrue()
         ->and(Schema::hasTable('gdpr_deletions'))->toBeTrue()
         ->and(Schema::hasTable('gdpr_audits'))->toBeTrue()
@@ -141,4 +141,22 @@ it('persists policy versions and acceptances', function () {
     ]);
 
     expect($acceptance->policyVersion->slug)->toBe('privacy');
+});
+
+it('creates bigint subject_id columns by default', function (string $table) {
+    expect(Schema::getColumnType($table, 'subject_id'))->toBe('integer');
+})->with(['gdpr_consents', 'gdpr_requests', 'gdpr_deletions', 'gdpr_audits', 'gdpr_policy_acceptances']);
+
+it('changes subject_id columns to the configured type via the upgrade migration', function () {
+    config()->set('gdpr.subject_key_type', 'string');
+
+    $migration = require __DIR__.'/../../database/upgrades/2026_09_11_000000_change_gdpr_subject_id_type.php';
+    $migration->up();
+
+    expect(Schema::getColumnType('gdpr_audits', 'subject_id'))->toBe('varchar')
+        ->and(Schema::getColumnType('gdpr_deletions', 'subject_id'))->toBe('varchar');
+
+    $migration->down();
+
+    expect(Schema::getColumnType('gdpr_audits', 'subject_id'))->toBe('integer');
 });
