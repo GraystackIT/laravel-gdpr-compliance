@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-09-11
+
 ### Added
 
 - `ConsentPurpose::TalentPool` — keeping an applicant's data on file after the vacancy they applied for is closed. A separate, withdrawable purpose from processing the application itself, which runs on a legitimate interest and has its own deletion deadline.
