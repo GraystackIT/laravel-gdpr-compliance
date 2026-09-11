@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Facade;
  * @method static GdprRequest requestDeletion(Model $subject)
  * @method static void cancelDeletion(GdprRequest $request)
  * @method static GdprRequest deleteImmediately(Model $subject)
- * @method static array processDueDeletions()
+ * @method static array{pass1: int, pass2: int, deferred: int} processDueDeletions()
  * @method static GdprRequest requestExport(Model $subject)
  * @method static bool isDeletionPending(Model $subject)
  * @method static array|null packageInventory()

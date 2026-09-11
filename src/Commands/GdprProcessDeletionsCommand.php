@@ -23,6 +23,16 @@ class GdprProcessDeletionsCommand extends Command
             $result['pass2'],
         ));
 
+        if ($result['deferred'] > 0) {
+            $this->error(sprintf(
+                'Left %d row(s) pending: their subject exists but no registered scope reaches it. '
+                .'See the log and the deletion_deferred entries in gdpr_audits.',
+                $result['deferred'],
+            ));
+
+            return self::FAILURE;
+        }
+
         return self::SUCCESS;
     }
 }

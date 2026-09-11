@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Subjects whose own model carries a global scope — multi-tenancy being the common case — were invisible to the package wherever that scope matches nothing, which is the state the queue and the scheduler run in. `requestDeletion()`, the export, `SubjectRecordResolver` and both deletion passes read the subject's own model with a bare `whereKey()` on a fresh query instead of going through its subject scope, so `processDueDeletions()` took the subject for already gone, marked the row `erased` and erased nothing — a `gdpr_deletions` record saying the opposite of the truth. The subject's own model now goes through its registered scope like every other model: the scope is read for the global scopes it removes and the row is selected by primary key. Subject models without a subject scope are unaffected, and a subject model whose scope is written for a *different* subject (answering `1 = 0` for itself) keeps reaching its own row.
+- A deletion whose subject exists but no scope reaches is no longer reported as done. `requestDeletion()` throws `SubjectNotReachable` before anything is written; `gdpr:process-deletions` leaves the row `pending_grace`, writes a `deletion_deferred` audit entry, logs an error and exits non-zero, while still processing every other row of the run. `processDueDeletions()` returns the count as `deferred`.
+- `whereDeletionPending()` and `whereNotDeletionPending()` threw `SQLSTATE[42883] operator does not exist` on PostgreSQL for every `subject_key_type` other than `bigint`. They compare `gdpr_deletions.subject_id` to the subject's key column, and the two only share a SQL type in a bigint installation. Both sides are now cast to text for the other three types; `bigint` keeps the plain column comparison, and with it the index on `subject_id`.
+- The upgrade migration could not be rolled back on PostgreSQL — `down()` failed with `SQLSTATE[42804] column "subject_id" cannot be cast automatically to type bigint`, and `up()` to `uuid` failed the same way. `ColumnDefinition::change()` emits no `USING` clause and PostgreSQL has no assignment cast from a string type back to bigint or uuid. `SubjectKeyType::changeColumn()` now emits the `ALTER TABLE ... USING` PostgreSQL needs and leaves every other driver on `change()`.
+
 ## [1.0.1] - 2026-09-11
 
 ### Added

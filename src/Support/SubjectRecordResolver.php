@@ -30,14 +30,8 @@ class SubjectRecordResolver
 
             /** @var Model $instance */
             $instance = new $modelClass;
-            $query = $instance->newQuery();
 
-            // If this model IS the subject, scope to itself by primary key.
-            if ($modelClass === $subject::class) {
-                $query->whereKey($subject->getKey());
-            } else {
-                $query = $this->registry->applyScopeFor($modelClass, $query, $subject);
-            }
+            $query = $this->registry->applyScopeFor($modelClass, $instance->newQuery(), $subject);
 
             yield ['model_class' => $modelClass, 'query' => $query];
         }

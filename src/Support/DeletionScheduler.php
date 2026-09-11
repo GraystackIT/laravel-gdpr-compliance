@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
 use LogicException;
 
 /**
@@ -39,6 +40,11 @@ use LogicException;
  */
 class DeletionScheduler
 {
+    /**
+     * Rows the current processDueDeletions() run had to leave pending.
+     */
+    protected int $deferred = 0;
+
     public function __construct(
         protected ModelRegistry $registry,
         protected SubjectRecordResolver $resolver,
@@ -83,18 +89,20 @@ class DeletionScheduler
                     continue;
                 }
 
-                // Count affected rows via the subject scope (or primary key for the subject itself).
+                // Count affected rows via the subject scope (which, for the
+                // subject's own model, narrows to its primary key).
                 $instance = new $modelClass;
-                $query = $instance->newQuery();
-
-                if ($modelClass === $subject::class) {
-                    $query->whereKey($subject->getKey());
-                } else {
-                    $query = $this->registry->applyScopeFor($modelClass, $query, $subject);
-                }
+                $query = $this->registry->applyScopeFor($modelClass, $instance->newQuery(), $subject);
 
                 $count = (int) $query->count();
                 if ($count === 0) {
+                    // A subject the package cannot see would be scheduled
+                    // without a row of its own and silently survive the
+                    // deletion. Refuse before anything is written.
+                    if ($modelClass === $subject::class && $this->subjectRowExists($instance, $subject->getKey())) {
+                        throw SubjectNotReachable::for($modelClass, $subject->getKey());
+                    }
+
                     continue;
                 }
 
@@ -183,14 +191,19 @@ class DeletionScheduler
      *
      * Rows are processed grouped by request, sorted by process_order ASC.
      *
-     * @return array{pass1: int, pass2: int}
+     * Rows whose subject exists but cannot be reached are left pending and
+     * counted as deferred instead of being reported as processed.
+     *
+     * @return array{pass1: int, pass2: int, deferred: int}
      */
     public function processDueDeletions(): array
     {
+        $this->deferred = 0;
+
         $pass1 = $this->runGraceExpiredPass();
         $pass2 = $this->runLegalHoldExpiredPass();
 
-        return ['pass1' => $pass1, 'pass2' => $pass2];
+        return ['pass1' => $pass1, 'pass2' => $pass2, 'deferred' => $this->deferred];
     }
 
     protected function runGraceExpiredPass(): int
@@ -212,7 +225,14 @@ class DeletionScheduler
                 ->get();
 
             foreach ($rows as $row) {
-                $this->processSubjectDeletionRow($row);
+                try {
+                    $this->processSubjectDeletionRow($row);
+                } catch (SubjectNotReachable $e) {
+                    $this->defer($row, $e);
+
+                    continue;
+                }
+
                 $total++;
             }
 
@@ -233,12 +253,22 @@ class DeletionScheduler
             ->orderBy('id')
             ->get();
 
+        $total = 0;
+
         foreach ($rows as $row) {
-            $this->forceDeleteAfterLegalHold($row);
+            try {
+                $this->forceDeleteAfterLegalHold($row);
+            } catch (SubjectNotReachable $e) {
+                $this->defer($row, $e);
+
+                continue;
+            }
+
             $this->maybeMarkRequestCompleted((int) $row->gdpr_request_id);
+            $total++;
         }
 
-        return $rows->count();
+        return $total;
     }
 
     /**
@@ -394,6 +424,13 @@ class DeletionScheduler
         Event::dispatch(new LegalHoldStarted($row));
     }
 
+    /**
+     * Load the subject of a deletion row. Returns null only when the row is
+     * really gone — a subject that merely is not visible right now would end
+     * up recorded as erased without anything having been erased.
+     *
+     * @throws SubjectNotReachable when the row exists but no scope reaches it
+     */
     protected function loadSubject(GdprDeletion $row): ?Model
     {
         $class = $row->subject_type;
@@ -401,10 +438,55 @@ class DeletionScheduler
             return null;
         }
 
-        /** @var Model|null $found */
-        $found = $class::query()->find($row->subject_id);
+        /** @var Model $instance */
+        $instance = new $class;
+        $ghost = $this->keyOnlySubject(new $class, $row->subject_id);
 
-        return $found;
+        /** @var Model|null $found */
+        $found = $this->registry->applyScopeFor($class, $instance->newQuery(), $ghost)->first();
+
+        if ($found !== null) {
+            return $found;
+        }
+
+        if ($this->subjectRowExists($instance, $row->subject_id)) {
+            throw SubjectNotReachable::for($class, $row->subject_id);
+        }
+
+        return null;
+    }
+
+    /**
+     * Whether the subject row is still in the table at all, ignoring every
+     * scope. Only ever used to tell "gone" apart from "hidden" — never to
+     * read or write rows the model's scopes keep out of reach.
+     */
+    protected function subjectRowExists(Model $instance, int|string $subjectId): bool
+    {
+        return $instance->newQueryWithoutScopes()->whereKey($subjectId)->exists();
+    }
+
+    /**
+     * Leave an unreachable row pending and record why. The next run picks it
+     * up again; a deletion that erased nothing must not report otherwise.
+     */
+    protected function defer(GdprDeletion $row, SubjectNotReachable $e): void
+    {
+        $this->deferred++;
+
+        Log::error($e->getMessage(), [
+            'gdpr_deletion_id' => $row->id,
+            'subject_type' => $row->subject_type,
+            'target_model' => $row->target_model,
+        ]);
+
+        $this->auditLogger->log(
+            event: 'deletion_deferred',
+            subjectType: $row->subject_type,
+            subjectId: $row->subject_id,
+            targetModel: $row->target_model,
+            context: ['reason' => 'subject_not_reachable'],
+        );
     }
 
     /**
@@ -419,12 +501,19 @@ class DeletionScheduler
             return null;
         }
 
-        /** @var Model $ghost */
-        $ghost = new $class;
-        $ghost->setAttribute($ghost->getKeyName(), $row->subject_id);
+        return $this->keyOnlySubject(new $class, $row->subject_id);
+    }
 
-        // exists = false by default; the scope only reads getKey() so this works.
-        return $ghost;
+    /**
+     * A subject instance carrying nothing but its primary key. exists = false
+     * by default; a subject scope only ever reads getKey(), so this is enough
+     * to filter rows by it.
+     */
+    protected function keyOnlySubject(Model $instance, int|string $subjectId): Model
+    {
+        $instance->setAttribute($instance->getKeyName(), $subjectId);
+
+        return $instance;
     }
 
     /**
@@ -440,15 +529,10 @@ class DeletionScheduler
         }
 
         $instance = new $targetModel;
-        $query = $instance->newQuery();
 
-        if ($targetModel === $subject::class) {
-            $query->whereKey($subject->getKey());
-        } else {
-            $query = $this->registry->applyScopeFor($targetModel, $query, $subject);
-        }
-
-        return $query->get();
+        return $this->registry
+            ->applyScopeFor($targetModel, $instance->newQuery(), $subject)
+            ->get();
     }
 
     /**

@@ -154,12 +154,20 @@ class ModelRegistry
      * Invoke scopePersonalDataForSubject on a query builder, using either the
      * model's own method or a registered scope class. Returns an unmodified
      * query if nothing is registered (caller should treat that as "skip").
+     *
+     * The subject's own model is the exception: it is scoped to the subject's
+     * primary key, and its registered scope is read only for the global scopes
+     * it removes. See applySubjectSelfScope().
      */
     public function applyScopeFor(
         string $modelClass,
         Builder $query,
         Model $subject,
     ): Builder {
+        if ($modelClass === $subject::class) {
+            return $this->applySubjectSelfScope($query, $subject);
+        }
+
         $scopeClass = $this->scopeClassFor($modelClass);
 
         if ($scopeClass !== null) {
@@ -174,5 +182,43 @@ class ModelRegistry
 
         // No scope → return a never-matching query so the caller silently skips.
         return $query->whereRaw('1 = 0');
+    }
+
+    /**
+     * Scope a query to the rows of the subject's own model that belong to the
+     * subject — always exactly one, the row carrying its primary key.
+     *
+     * The registered scope is consulted only for the global scopes it removes:
+     * that is how a tenant-scoped model makes itself reachable outside a
+     * request, and it is the only part of the scope that applies here. Its
+     * filters describe how *other* subjects reach this model's rows, so a
+     * subject model whose scope answers "1 = 0" for itself keeps working.
+     */
+    protected function applySubjectSelfScope(Builder $query, Model $subject): Builder
+    {
+        return $query
+            ->withoutGlobalScopes($this->globalScopesRemovedBy($subject))
+            ->whereKey($subject->getKey());
+    }
+
+    /**
+     * The global scopes the subject's registered scope takes off a query, or
+     * none when the subject registers no scope at all.
+     *
+     * @return array<int, string>
+     */
+    protected function globalScopesRemovedBy(Model $subject): array
+    {
+        $scopeClass = $this->scopeClassFor($subject::class);
+
+        if ($scopeClass !== null) {
+            return $scopeClass::apply($subject->newQuery(), $subject)->removedScopes();
+        }
+
+        if (method_exists($subject, 'scopePersonalDataForSubject')) {
+            return $subject->newQuery()->personalDataForSubject($subject)->removedScopes();
+        }
+
+        return [];
     }
 }

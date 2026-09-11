@@ -15,6 +15,12 @@
         <testsuite name="SubjectKeyTypes">
             <directory>tests/SubjectKeyTypes</directory>
         </testsuite>
+        <testsuite name="GlobalScopes">
+            <directory>tests/GlobalScopes</directory>
+        </testsuite>
+        <testsuite name="Drivers">
+            <directory>tests/Drivers</directory>
+        </testsuite>
     </testsuites>
     <source>
         <include>

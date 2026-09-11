@@ -48,6 +48,9 @@ class GdprManager
         return $request->fresh() ?? $request;
     }
 
+    /**
+     * @return array{pass1: int, pass2: int, deferred: int}
+     */
     public function processDueDeletions(): array
     {
         return $this->scheduler->processDueDeletions();

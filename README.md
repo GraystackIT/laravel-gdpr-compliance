@@ -361,7 +361,7 @@ The `gdpr_audits` table records deletion/export pipeline events only. It **never
 
 After a subject is hard-deleted, their audit entries survive as orphans — the `subject_id` FK points nowhere, which means no re-identification is possible. This is by design.
 
-Logged events: `deletion_requested`, `deletion_scheduled`, `deletion_cancelled`, `anonymization_completed`, `deletion_completed`, `legal_hold_started`, `legal_hold_expired`, `export_requested`, `export_completed`.
+Logged events: `deletion_requested`, `deletion_scheduled`, `deletion_cancelled`, `anonymization_completed`, `deletion_completed`, `deletion_deferred`, `legal_hold_started`, `legal_hold_expired`, `export_requested`, `export_completed`.
 
 ## Events
 
@@ -418,7 +418,7 @@ The recipient email is **snapshotted** into `gdpr_requests.notification_email` a
 
 | Command | Purpose |
 |---|---|
-| `gdpr:process-deletions` | Run daily via scheduler. Processes grace-expired and legal-hold-expired rows. |
+| `gdpr:process-deletions` | Run daily via scheduler. Processes grace-expired and legal-hold-expired rows. Exits non-zero when a row had to be left pending (see [Subjects behind a global scope](#subjects-behind-a-global-scope)). |
 | `gdpr:export {subject} {id}` | Create an export request and dispatch the export job. |
 | `gdpr:erase {subject} {id} [--now]` | Request deletion. `--now` skips grace. |
 | `gdpr:audit [--subject=] [--id=] [--event=]` | Show recent audit entries with filters. |
@@ -543,6 +543,36 @@ php artisan migrate
 
 The migration refuses conversions it cannot perform safely — it has no way to know which UUID a subject that used to have the key `42` now carries, so mapping stored keys onto new values is your job. It checks all five tables before altering any of them, so a refusal leaves the schema untouched. Widening to `string` is always allowed and keeps the stored keys as they are.
 
+### Subjects behind a global scope
+
+A subject model that carries a global scope — multi-tenancy is the common case — is invisible to the package wherever no tenant is bound, which is exactly the state the queue worker and the scheduler run in. Let the model's subject scope take that global scope off:
+
+```php
+class Member extends Model implements PersonalData
+{
+    use IsPersonalDataSubject;
+
+    protected static function booted(): void
+    {
+        static::addGlobalScope('organization', function (Builder $query) {
+            // ... matches nothing while no organization is bound
+        });
+    }
+
+    public function scopePersonalDataForSubject(Builder $query, Model $subject): Builder
+    {
+        return $query->withoutGlobalScope('organization')->whereKey($subject->getKey());
+    }
+}
+```
+
+For the subject's own model, the package reads this scope **only** for the global scopes it removes — the row is always selected by primary key. A subject model whose scope is written for a *different* subject (and answers `1 = 0` for itself) therefore keeps working, and a subject model without a scope at all is unaffected.
+
+If a subject row exists that no scope reaches, the package refuses rather than reporting an erasure that never happened:
+
+- `requestDeletion()` throws `SubjectNotReachable` before writing anything.
+- `gdpr:process-deletions` leaves that row `pending_grace`, writes a `deletion_deferred` audit entry, logs an error and exits non-zero. Every other row of the run is still processed, and the next run retries.
+
 ### Subject-to-subject references
 
 When processing Subject A, the package never modifies Subject B — even if B has a foreign key to A. Use `onDelete('set null')` on FK migrations or listen to the `PersonalDataErased` event to handle cross-subject cleanup in your app code.
@@ -563,6 +593,8 @@ When processing Subject A, the package never modifies Subject B — even if B ha
 ```bash
 composer test
 ```
+
+The suite runs on SQLite. The `Drivers` suite additionally asserts the `subject_id` behavior that depends on the database — the deletion-pending scopes across all four `subject_key_type` values and the upgrade migration in both directions — against a real PostgreSQL and MySQL server. Those tests skip themselves when no server answers; point them somewhere with `GDPR_PGSQL_HOST`, `GDPR_PGSQL_PORT`, `GDPR_PGSQL_USERNAME`, `GDPR_PGSQL_PASSWORD`, `GDPR_PGSQL_DATABASE` (and the `GDPR_MYSQL_*` equivalents). The test database is created on first use.
 
 ## License
 
