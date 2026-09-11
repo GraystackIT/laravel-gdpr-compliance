@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-09-11
+
 ### Fixed
 
 - A subject deleted outside the package during its grace period took its whole deletion request down with it: Pass 1 found no subject, marked every row of the request `erased` and left the rows of the other models — orders, addresses, notes — untouched with their PII, and legal-hold rows never reached Pass 2 at all. Pass 1 now falls back to the same key-only ghost subject Pass 2 has always used, so every other model is still processed by its own retention mode. A row is closed as `erased` without processing only when nothing of its model is left.
