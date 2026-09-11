@@ -14,6 +14,7 @@ use GraystackIt\Gdpr\Models\GdprAudit;
 use GraystackIt\Gdpr\Models\GdprDeletion;
 use GraystackIt\Gdpr\Models\GdprRequest;
 use GraystackIt\Gdpr\Support\DeletionScheduler;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Workbench\App\Models\Address;
 use Workbench\App\Models\Order;
@@ -187,4 +188,68 @@ it('snapshot wins over live profile changes', function () {
 
     // Orders should be force-deleted because snapshot says 'delete'
     expect(Order::where('user_id', $user->id)->count())->toBe(0);
+});
+
+it('still processes the related rows when the subject was deleted outside the package', function () {
+    $user = seedSubjectWithData();
+    $request = $this->scheduler->requestDeletion($user);
+
+    // The application (or a cascading FK) removed the subject during grace.
+    // Its orders and addresses are still there, PII included.
+    DB::table('users')->where('id', $user->id)->delete();
+
+    GdprDeletion::query()->update(['scheduled_for' => now()->subDay()]);
+    $this->scheduler->processDueDeletions();
+
+    $states = GdprDeletion::where('gdpr_request_id', $request->id)
+        ->orderBy('process_order')
+        ->pluck('state', 'target_model')
+        ->all();
+
+    expect($states)->toBe([
+        Order::class => DeletionState::PendingLegalHold,
+        Address::class => DeletionState::Erased,
+        User::class => DeletionState::Erased,
+    ])
+        ->and(Address::where('user_id', $user->id)->count())->toBe(0)
+        ->and(Order::where('user_id', $user->id)->pluck('billing_email')->all())
+        ->not->toContain('ada@example.com');
+});
+
+it('force-deletes the legal hold rows of a subject that is long gone', function () {
+    $user = seedSubjectWithData();
+    $request = $this->scheduler->requestDeletion($user);
+
+    DB::table('users')->where('id', $user->id)->delete();
+
+    GdprDeletion::query()->update(['scheduled_for' => now()->subDay()]);
+    $this->scheduler->processDueDeletions();
+
+    GdprDeletion::where('state', DeletionState::PendingLegalHold)->update(['hold_until' => now()->subDay()]);
+    $this->scheduler->processDueDeletions();
+
+    expect(Order::where('user_id', $user->id)->count())->toBe(0)
+        ->and($request->fresh()->status)->toBe(RequestStatus::Completed);
+});
+
+it('records a deletion whose rows were already gone in the audit log', function () {
+    $user = seedSubjectWithData();
+    $request = $this->scheduler->requestDeletion($user);
+
+    DB::table('orders')->where('user_id', $user->id)->delete();
+    DB::table('addresses')->where('user_id', $user->id)->delete();
+    DB::table('users')->where('id', $user->id)->delete();
+
+    GdprDeletion::query()->update(['scheduled_for' => now()->subDay()]);
+    $this->scheduler->processDueDeletions();
+
+    $audit = GdprAudit::where('event', 'deletion_completed')->where('target_model', User::class)->first();
+
+    expect(GdprDeletion::where('gdpr_request_id', $request->id)->pluck('state')->unique()->all())
+        ->toBe([DeletionState::Erased])
+        ->and($audit)->not->toBeNull()
+        ->and((int) $audit->affected_rows)->toBe(0)
+        ->and($audit->context)->toBe(['reason' => 'no_rows_left']);
+
+    Event::assertDispatched(PersonalDataErased::class);
 });

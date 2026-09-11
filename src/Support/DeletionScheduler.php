@@ -282,14 +282,18 @@ class DeletionScheduler
         }
 
         $policy = $row->retentionPolicy();
-        $subject = $this->loadSubject($row);
         $targetModel = $row->target_model;
 
+        // The subject can be gone before its grace period expires — deleted by
+        // the application, by a cascading FK — while the rows of the other
+        // models that belonged to it are still there, PII included. A ghost
+        // subject carrying only the primary key keeps those reachable, the
+        // same way Pass 2 reaches them after a legal hold.
+        $subject = $this->loadSubject($row) ?? $this->ghostSubject($row);
+
         if ($subject === null) {
-            // Subject is gone already; mark erased.
-            $row->transitionTo(DeletionState::Erased);
-            $row->processed_at = now();
-            $row->save();
+            // subject_type no longer resolves to a class.
+            $this->markErased($row, 'subject_class_missing');
 
             return;
         }
@@ -297,11 +301,44 @@ class DeletionScheduler
         $rows = $this->rowsForTarget($targetModel, $subject);
         $affected = $rows->count();
 
+        if ($affected === 0 && ! $subject->exists) {
+            // Subject gone and nothing left of this model: the data is gone,
+            // whatever the retention mode would have done with it.
+            $this->markErased($row, 'no_rows_left');
+
+            return;
+        }
+
         match ($policy->mode) {
             RetentionMode::Delete => $this->handleDelete($row, $rows, $subject, $targetModel, $affected),
             RetentionMode::Anonymize => $this->handleAnonymize($row, $rows, $subject, $targetModel, $affected),
             RetentionMode::LegalHold => $this->handleLegalHold($row, $rows, $policy, $subject, $targetModel, $affected),
         };
+    }
+
+    /**
+     * Close a row without touching any host rows: there are none left.
+     *
+     * The audit entry and the event still fire. A row reaching a terminal
+     * state has to be readable from gdpr_audits, and listeners that clean up
+     * copies of the data outside the database are due either way.
+     */
+    protected function markErased(GdprDeletion $row, string $reason): void
+    {
+        $row->transitionTo(DeletionState::Erased);
+        $row->processed_at = now();
+        $row->save();
+
+        $this->auditLogger->log(
+            event: 'deletion_completed',
+            subjectType: $row->subject_type,
+            subjectId: $row->subject_id,
+            targetModel: $row->target_model,
+            affectedRows: 0,
+            context: ['reason' => $reason],
+        );
+
+        Event::dispatch(new PersonalDataErased($row));
     }
 
     /**
@@ -491,8 +528,14 @@ class DeletionScheduler
 
     /**
      * Construct a ghost subject carrying only the primary key. Used when the
-     * real subject is already gone (e.g. during Pass 2 after the subject was
-     * force-deleted in Pass 1) but related rows still need to be scoped.
+     * real subject is already gone (deleted by the application during grace,
+     * or force-deleted in an earlier pass) but related rows still need to be
+     * scoped.
+     *
+     * The primary key is all gdpr_deletions records of a subject, so this is
+     * as much as the package can hand a scope. A subject scope that reads any
+     * other attribute of the subject matches nothing here — hence the rule
+     * that a subject scope filters on getKey() alone.
      */
     protected function ghostSubject(GdprDeletion $row): ?Model
     {

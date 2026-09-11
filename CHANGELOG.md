@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- A subject deleted outside the package during its grace period took its whole deletion request down with it: Pass 1 found no subject, marked every row of the request `erased` and left the rows of the other models — orders, addresses, notes — untouched with their PII, and legal-hold rows never reached Pass 2 at all. Pass 1 now falls back to the same key-only ghost subject Pass 2 has always used, so every other model is still processed by its own retention mode. A row is closed as `erased` without processing only when nothing of its model is left.
+- A deletion row that closed as `erased` because nothing of its model was left did so without a trace: no `deletion_completed` audit entry and no `PersonalDataErased` event. The audit log skipped a terminal state change, and listeners that clean up copies of the data outside the database never ran for those rows. Both now fire, with `affected_rows` 0 and the reason in the audit context.
+
 ## [1.0.2] - 2026-09-11
 
 ### Fixed

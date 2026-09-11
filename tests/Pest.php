@@ -21,6 +21,10 @@ pest()->extend(GlobalScopedSubjectTestCase::class)
     ->use(RefreshDatabase::class)
     ->in('GlobalScopes');
 
+// The driver suites deliberately run without RefreshDatabase: their tests
+// ALTER column types, and MySQL commits DDL implicitly, so a transaction could
+// not roll those changes back. Testbench migrates and rolls back around every
+// test instead, which resets the schema on each driver.
 pest()->extend(PostgresTestCase::class)->in('Drivers/Postgres');
 
 pest()->extend(MySqlTestCase::class)->in('Drivers/MySql');

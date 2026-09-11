@@ -130,6 +130,8 @@ class Order extends Model implements PersonalData
 }
 ```
 
+**A subject scope must filter on `$subject->getKey()` alone.** By the time a row is processed the subject itself can be gone — deleted by your application during grace, or force-deleted in an earlier pass — and the package then passes an instance carrying nothing but the primary key, which is all `gdpr_deletions` records of it. A scope reading any other attribute of the subject would match nothing at that point, and the rows it should have reached would stay behind.
+
 ### 2. Register models in config
 
 In `config/gdpr.php`, list every model that contains personal data:
@@ -276,6 +278,8 @@ Cron Pass 2:
 - Cancellation is trivial — just flip the state
 - The package never forces `SoftDeletes` on your models
 - Auth behavior during grace is your app's decision (see below)
+
+If the subject itself disappears during grace — deleted by your application, by a cascading FK — the passes still process the rows of every other model that belonged to it, matched by the subject key recorded on the request. A `gdpr_deletions` row is closed as `erased` without processing only when nothing of its model is left.
 
 ### Auth during grace
 
