@@ -57,7 +57,11 @@ class ConsentManager
             ->where('subject_type', $subject::class)
             ->where('subject_id', SubjectKeyType::of($subject))
             ->where('purpose', $purpose->value)
-            ->latest('created_at')
+            // A grant and a withdraw can land in the same second, and which of
+            // two tied rows LIMIT 1 returns is up to the driver. The id breaks
+            // the tie in insertion order, which is the order they happened in.
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->first();
 
         return $latest?->action === 'grant';

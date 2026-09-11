@@ -10,7 +10,10 @@ use GraystackIt\Gdpr\Commands\GdprPackagesScanCommand;
 use GraystackIt\Gdpr\Commands\GdprProcessDeletionsCommand;
 use GraystackIt\Gdpr\Commands\GdprPruneCommand;
 use GraystackIt\Gdpr\Commands\GdprReportCommand;
+use GraystackIt\Gdpr\Enums\ConsentPurpose;
+use GraystackIt\Gdpr\Models\Consent;
 use GraystackIt\Gdpr\Models\GdprAudit;
+use GraystackIt\Gdpr\Support\ConsentManager;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Storage;
 use Workbench\App\Models\Address;
@@ -63,6 +66,32 @@ it('gdpr:prune with --dry-run does not delete anything', function () {
     $this->artisan('gdpr:prune', ['--dry-run' => true])
         ->assertExitCode(0)
         ->expectsOutputToContain('Dry run');
+});
+
+it('gdpr:prune keeps the consent row hasConsent reads when timestamps tie', function () {
+    $user = User::create(['name' => 'Ada', 'email' => 'ada@example.com']);
+    $at = now()->subYears(5);
+
+    $grant = Consent::create([
+        'subject_type' => User::class,
+        'subject_id' => $user->id,
+        'purpose' => 'marketing',
+        'action' => 'grant',
+        'created_at' => $at,
+    ]);
+    $withdraw = Consent::create([
+        'subject_type' => User::class,
+        'subject_id' => $user->id,
+        'purpose' => 'marketing',
+        'action' => 'withdraw',
+        'created_at' => $at,
+    ]);
+
+    $this->artisan('gdpr:prune', ['--table' => 'consents'])->assertExitCode(0);
+
+    expect(Consent::find($grant->id))->toBeNull()
+        ->and(Consent::find($withdraw->id))->not->toBeNull()
+        ->and(app(ConsentManager::class)->hasConsent($user, ConsentPurpose::Marketing))->toBeFalse();
 });
 
 it('gdpr:erase processes subject deletion', function () {

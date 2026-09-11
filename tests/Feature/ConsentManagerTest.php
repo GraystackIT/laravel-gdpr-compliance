@@ -58,6 +58,27 @@ it('handles grant -> withdraw -> grant flow correctly', function () {
     expect($this->cm->hasConsent($this->user, ConsentPurpose::Marketing))->toBeTrue();
 });
 
+it('breaks a created_at tie by insertion order', function () {
+    $at = now();
+
+    Consent::create([
+        'subject_type' => User::class,
+        'subject_id' => $this->user->id,
+        'purpose' => 'marketing',
+        'action' => 'grant',
+        'created_at' => $at,
+    ]);
+    Consent::create([
+        'subject_type' => User::class,
+        'subject_id' => $this->user->id,
+        'purpose' => 'marketing',
+        'action' => 'withdraw',
+        'created_at' => $at,
+    ]);
+
+    expect($this->cm->hasConsent($this->user, ConsentPurpose::Marketing))->toBeFalse();
+});
+
 it('returns status for all purposes', function () {
     $this->cm->grant($this->user, ConsentPurpose::Analytics);
 

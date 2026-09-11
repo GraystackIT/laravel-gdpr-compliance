@@ -147,10 +147,69 @@ it('creates bigint subject_id columns by default', function (string $table) {
     expect(Schema::getColumnType($table, 'subject_id'))->toBe('integer');
 })->with(['gdpr_consents', 'gdpr_requests', 'gdpr_deletions', 'gdpr_audits', 'gdpr_policy_acceptances']);
 
+function subjectIdUpgradeMigration(): object
+{
+    return require __DIR__.'/../../database/upgrades/2026_09_11_000000_change_gdpr_subject_id_type.php';
+}
+
+it('refuses to convert stored numeric subject keys to uuid', function () {
+    Consent::create([
+        'subject_type' => 'App\\Models\\User',
+        'subject_id' => 42,
+        'purpose' => 'marketing',
+        'action' => 'grant',
+    ]);
+
+    config()->set('gdpr.subject_key_type', 'uuid');
+
+    subjectIdUpgradeMigration()->up();
+})->throws(RuntimeException::class, 'gdpr_consents.subject_id holds [42]');
+
+it('leaves the schema untouched when a subject key does not fit the target type', function () {
+    Consent::create([
+        'subject_type' => 'App\\Models\\User',
+        'subject_id' => 42,
+        'purpose' => 'marketing',
+        'action' => 'grant',
+    ]);
+
+    config()->set('gdpr.subject_key_type', 'uuid');
+
+    expect(fn () => subjectIdUpgradeMigration()->up())->toThrow(RuntimeException::class)
+        ->and(Schema::getColumnType('gdpr_consents', 'subject_id'))->toBe('integer')
+        ->and(Schema::getColumnType('gdpr_audits', 'subject_id'))->toBe('integer');
+});
+
+it('refuses to convert stored uuid subject keys back to bigint', function () {
+    Consent::create([
+        'subject_type' => 'App\\Models\\Applicant',
+        'subject_id' => '9f8c1d2e-4b3a-4c5d-8e6f-7a8b9c0d1e2f',
+        'purpose' => 'marketing',
+        'action' => 'grant',
+    ]);
+
+    subjectIdUpgradeMigration()->down();
+})->throws(RuntimeException::class, 'is not a valid bigint');
+
+it('converts populated tables to string and keeps the stored keys', function () {
+    Consent::create([
+        'subject_type' => 'App\\Models\\User',
+        'subject_id' => 42,
+        'purpose' => 'marketing',
+        'action' => 'grant',
+    ]);
+
+    config()->set('gdpr.subject_key_type', 'string');
+    subjectIdUpgradeMigration()->up();
+
+    expect(Schema::getColumnType('gdpr_consents', 'subject_id'))->toBe('varchar')
+        ->and(Consent::first()->subject_id)->toBe('42');
+});
+
 it('changes subject_id columns to the configured type via the upgrade migration', function () {
     config()->set('gdpr.subject_key_type', 'string');
 
-    $migration = require __DIR__.'/../../database/upgrades/2026_09_11_000000_change_gdpr_subject_id_type.php';
+    $migration = subjectIdUpgradeMigration();
     $migration->up();
 
     expect(Schema::getColumnType('gdpr_audits', 'subject_id'))->toBe('varchar')

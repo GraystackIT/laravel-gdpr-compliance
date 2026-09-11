@@ -49,7 +49,10 @@ class GdprPruneCommand extends Command
         }
 
         if ($only === null || $only === 'consents') {
-            // Preserve latest row per (subject_type, subject_id, purpose).
+            // Preserve the current state per (subject_type, subject_id, purpose):
+            // the row ConsentManager::hasConsent() reads. The table is append-only
+            // with created_at defaulting to insert time, so the highest id in a
+            // group is that row — including when timestamps tie.
             $latestIds = DB::table('gdpr_consents')
                 ->select(DB::raw('MAX(id) as id'))
                 ->groupBy('subject_type', 'subject_id', 'purpose')

@@ -10,11 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `ConsentPurpose::TalentPool` — keeping an applicant's data on file after the vacancy they applied for is closed. A separate, withdrawable purpose from processing the application itself, which runs on a legitimate interest and has its own deletion deadline.
 - Non-numeric subject keys. `config('gdpr.subject_key_type')` (`bigint` | `uuid` | `ulid` | `string`) decides the column type of `subject_id` in all five subject tables and how subject keys are bound in queries. Defaults to `bigint`, so existing installations are unaffected. `string` holds numeric and non-numeric keys side by side, which is what an application needs once subjects with different key types are registered.
-- `gdpr-upgrade-migrations` publish tag, carrying a migration that rewrites `subject_id` in `gdpr_consents`, `gdpr_requests`, `gdpr_deletions`, `gdpr_audits` and `gdpr_policy_acceptances` to the configured type. Required when changing `subject_key_type` on an existing installation.
+- `gdpr-upgrade-migrations` publish tag, carrying a migration that rewrites `subject_id` in `gdpr_consents`, `gdpr_requests`, `gdpr_deletions`, `gdpr_audits` and `gdpr_policy_acceptances` to the configured type. Required when changing `subject_key_type` on an existing installation. It refuses conversions it cannot perform — stored subject keys are application data the package cannot map onto new values — and checks every table before altering any, so a refusal leaves the schema untouched.
 
 ### Fixed
 
 - `gdpr:prune` threw on the consents pass — it still queried the pre-1.0.0 `consents` table instead of `gdpr_consents`.
+- `ConsentManager::hasConsent()` could return the wrong state when a grant and a withdraw shared a `created_at` timestamp: which of two tied rows `LIMIT 1` returned was up to the driver. It now breaks the tie on `id`, matching the row `gdpr:prune` preserves as the current state.
 
 ## [1.0.0] - 2026-06-15
 

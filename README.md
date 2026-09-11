@@ -541,6 +541,8 @@ php artisan vendor:publish --tag=gdpr-upgrade-migrations
 php artisan migrate
 ```
 
+The migration refuses conversions it cannot perform safely — it has no way to know which UUID a subject that used to have the key `42` now carries, so mapping stored keys onto new values is your job. It checks all five tables before altering any of them, so a refusal leaves the schema untouched. Widening to `string` is always allowed and keeps the stored keys as they are.
+
 ### Subject-to-subject references
 
 When processing Subject A, the package never modifies Subject B — even if B has a foreign key to A. Use `onDelete('set null')` on FK migrations or listen to the `PersonalDataErased` event to handle cross-subject cleanup in your app code.
