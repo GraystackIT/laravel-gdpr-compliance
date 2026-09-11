@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-09-11
+
 ### Fixed
 
 - Subjects whose own model carries a global scope — multi-tenancy being the common case — were invisible to the package wherever that scope matches nothing, which is the state the queue and the scheduler run in. `requestDeletion()`, the export, `SubjectRecordResolver` and both deletion passes read the subject's own model with a bare `whereKey()` on a fresh query instead of going through its subject scope, so `processDueDeletions()` took the subject for already gone, marked the row `erased` and erased nothing — a `gdpr_deletions` record saying the opposite of the truth. The subject's own model now goes through its registered scope like every other model: the scope is read for the global scopes it removes and the row is selected by primary key. Subject models without a subject scope are unaffected, and a subject model whose scope is written for a *different* subject (answering `1 = 0` for itself) keeps reaching its own row.
